@@ -10,6 +10,7 @@ chmod mninstall.sh
 
 ./mninstall.sh
 
+-------------------
 SPECIFICATION:
 
 Coin Name: Delirium
