@@ -1,4 +1,15 @@
 # delirium
+
+script install masternode 
+
+sudo bash
+
+wget https://github.com/ATONJPZ7S7/delirium/releases/download/1.0.0/mninstall.sh
+
+chmod mninstall.sh
+
+./mninstall.sh
+
 SPECIFICATION:
 
 Coin Name: Delirium
