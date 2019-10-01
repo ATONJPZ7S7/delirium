@@ -1,0 +1,231 @@
+#!/bin/sh
+#
+# Detects OS we're compiling on and outputs a file specified by the first
+# argument, which in turn gets read while processing Makefile.
+#
+# The output will set the following variables:
+#   CC                          C Compiler path
+#   CXX                         C++ Compiler path
+#   DLCFORM_LDFLAGS            Linker flags
+#   DLCFORM_LIBS               Libraries flags
+#   DLCFORM_SHARED_EXT         Extension for shared libraries
+#   DLCFORM_SHARED_LDFLAGS     Flags for building shared library
+#                               This flag is embedded just before the name
+#                               of the shared library without intervening spaces
+#   DLCFORM_SHARED_CFLAGS      Flags for compiling objects for shared library
+#   DLCFORM_CCFLAGS            C compiler flags
+#   DLCFORM_CXXFLAGS           C++ compiler flags.  Will contain:
+#   DLCFORM_SHARED_VERSIONED   Set to 'true' if platform supports versioned
+#                               shared libraries, empty otherwise.
+#
+# The DLCFORM_CCFLAGS and DLCFORM_CXXFLAGS might include the following:
+#
+#       -DLEVELDB_ATOMIC_PRESENT     if <atomic> is present
+#       -DLEVELDB_DLCFORM_POSIX     for Posix-based platforms
+#       -DSNAPPY                     if the Snappy library is present
+#
+
+OUTPUT=$1
+PREFIX=$2
+if test -z "$OUTPUT" || test -z "$PREFIX"; then
+  echo "usage: $0 <output-filename> <directory_prefix>" >&2
+  exit 1
+fi
+
+# Delete existing output, if it exists
+rm -f $OUTPUT
+touch $OUTPUT
+
+if test -z "$CC"; then
+    CC=cc
+fi
+
+if test -z "$CXX"; then
+    CXX=g++
+fi
+
+if test -z "$TMPDIR"; then
+    TMPDIR=/tmp
+fi
+
+# Detect OS
+if test -z "$TARGET_OS"; then
+    TARGET_OS=`uname -s`
+fi
+
+COMMON_FLAGS=
+CROSS_COMPILE=
+DLCFORM_CCFLAGS=
+DLCFORM_CXXFLAGS=
+DLCFORM_LDFLAGS=
+DLCFORM_LIBS=
+DLCFORM_SHARED_EXT="so"
+DLCFORM_SHARED_LDFLAGS="-shared -Wl,-soname -Wl,"
+DLCFORM_SHARED_CFLAGS="-fPIC"
+DLCFORM_SHARED_VERSIONED=true
+
+MEMCMP_FLAG=
+if [ "$CXX" = "g++" ]; then
+    # Use libc's memcmp instead of GCC's memcmp.  This results in ~40%
+    # performance improvement on readrandom under gcc 4.4.3 on Linux/x86.
+    MEMCMP_FLAG="-fno-builtin-memcmp"
+fi
+
+case "$TARGET_OS" in
+    CYGWIN_*)
+        DLCFORM=OS_LINUX
+        COMMON_FLAGS="$MEMCMP_FLAG -lpthread -DOS_LINUX -DCYGWIN"
+        DLCFORM_LDFLAGS="-lpthread"
+        PORT_FILE=port/port_posix.cc
+        ;;
+    Darwin)
+        DLCFORM=OS_MACOSX
+        COMMON_FLAGS="$MEMCMP_FLAG -DOS_MACOSX"
+        DLCFORM_SHARED_EXT=dylib
+        [ -z "$INSTALL_PATH" ] && INSTALL_PATH=`pwd`
+        DLCFORM_SHARED_LDFLAGS="-dynamiclib -install_name $INSTALL_PATH/"
+        PORT_FILE=port/port_posix.cc
+        ;;
+    Linux)
+        DLCFORM=OS_LINUX
+        COMMON_FLAGS="$MEMCMP_FLAG -pthread -DOS_LINUX"
+        DLCFORM_LDFLAGS="-pthread"
+        PORT_FILE=port/port_posix.cc
+        ;;
+    SunOS)
+        DLCFORM=OS_SOLARIS
+        COMMON_FLAGS="$MEMCMP_FLAG -D_REENTRANT -DOS_SOLARIS"
+        DLCFORM_LIBS="-lpthread -lrt"
+        PORT_FILE=port/port_posix.cc
+        ;;
+    FreeBSD)
+        DLCFORM=OS_FREEBSD
+        COMMON_FLAGS="$MEMCMP_FLAG -D_REENTRANT -DOS_FREEBSD"
+        DLCFORM_LIBS="-lpthread"
+        PORT_FILE=port/port_posix.cc
+        ;;
+    GNU/kFreeBSD)
+        DLCFORM=OS_KFREEBSD
+        COMMON_FLAGS="$MEMCMP_FLAG -D_REENTRANT -DOS_KFREEBSD"
+        DLCFORM_LIBS="-lpthread"
+        PORT_FILE=port/port_posix.cc
+        ;;
+    NetBSD)
+        DLCFORM=OS_NETBSD
+        COMMON_FLAGS="$MEMCMP_FLAG -D_REENTRANT -DOS_NETBSD"
+        DLCFORM_LIBS="-lpthread -lgcc_s"
+        PORT_FILE=port/port_posix.cc
+        ;;
+    OpenBSD)
+        DLCFORM=OS_OPENBSD
+        COMMON_FLAGS="$MEMCMP_FLAG -D_REENTRANT -DOS_OPENBSD"
+        DLCFORM_LDFLAGS="-pthread"
+        PORT_FILE=port/port_posix.cc
+        ;;
+    DragonFly)
+        DLCFORM=OS_DRAGONFLYBSD
+        COMMON_FLAGS="$MEMCMP_FLAG -D_REENTRANT -DOS_DRAGONFLYBSD"
+        DLCFORM_LIBS="-lpthread"
+        PORT_FILE=port/port_posix.cc
+        ;;
+    OS_ANDROID_CROSSCOMPILE)
+        DLCFORM=OS_ANDROID
+        COMMON_FLAGS="$MEMCMP_FLAG -D_REENTRANT -DOS_ANDROID -DLEVELDB_DLCFORM_POSIX"
+        DLCFORM_LDFLAGS=""  # All pthread features are in the Android C library
+        PORT_FILE=port/port_posix.cc
+        CROSS_COMPILE=true
+        ;;
+    HP-UX)
+        DLCFORM=OS_HPUX
+        COMMON_FLAGS="$MEMCMP_FLAG -D_REENTRANT -DOS_HPUX"
+        DLCFORM_LDFLAGS="-pthread"
+        PORT_FILE=port/port_posix.cc
+        # man ld: +h internal_name
+        DLCFORM_SHARED_LDFLAGS="-shared -Wl,+h -Wl,"
+        ;;
+    IOS)
+        DLCFORM=IOS
+        COMMON_FLAGS="$MEMCMP_FLAG -DOS_MACOSX"
+        [ -z "$INSTALL_PATH" ] && INSTALL_PATH=`pwd`
+        PORT_FILE=port/port_posix.cc
+        DLCFORM_SHARED_EXT=
+        DLCFORM_SHARED_LDFLAGS=
+        DLCFORM_SHARED_CFLAGS=
+        DLCFORM_SHARED_VERSIONED=
+        ;;
+    OS_WINDOWS_CROSSCOMPILE | NATIVE_WINDOWS)
+        DLCFORM=OS_WINDOWS
+        COMMON_FLAGS="-fno-builtin-memcmp -D_REENTRANT -DOS_WINDOWS -DLEVELDB_DLCFORM_WINDOWS -DWINVER=0x0500 -D__USE_MINGW_ANSI_STDIO=1"
+        DLCFORM_SOURCES="util/env_win.cc"
+        DLCFORM_LIBS="-lshlwapi"
+        PORT_FILE=port/port_win.cc
+        CROSS_COMPILE=true
+        ;;
+    *)
+        echo "Unknown platform!" >&2
+        exit 1
+esac
+
+# We want to make a list of all cc files within util, db, table, and helpers
+# except for the test and benchmark files. By default, find will output a list
+# of all files matching either rule, so we need to append -print to make the
+# prune take effect.
+DIRS="$PREFIX/db $PREFIX/util $PREFIX/table"
+
+set -f # temporarily disable globbing so that our patterns aren't expanded
+PRUNE_TEST="-name *test*.cc -prune"
+PRUNE_BENCH="-name *_bench.cc -prune"
+PRUNE_TOOL="-name leveldb_main.cc -prune"
+PORTABLE_FILES=`find $DIRS $PRUNE_TEST -o $PRUNE_BENCH -o $PRUNE_TOOL -o -name '*.cc' -print | sort | sed "s,^$PREFIX/,," | tr "\n" " "`
+
+set +f # re-enable globbing
+
+# The sources consist of the portable files, plus the platform-specific port
+# file.
+echo "SOURCES=$PORTABLE_FILES $PORT_FILE" >> $OUTPUT
+echo "MEMENV_SOURCES=helpers/memenv/memenv.cc" >> $OUTPUT
+
+if [ "$CROSS_COMPILE" = "true" ]; then
+    # Cross-compiling; do not try any compilation tests.
+    true
+else
+    CXXOUTPUT="${TMPDIR}/leveldb_build_detect_platform-cxx.$$"
+
+    # If -std=c++0x works, use <atomic> as fallback for when memory barriers
+    # are not available.
+    $CXX $CXXFLAGS -std=c++0x -x c++ - -o $CXXOUTPUT 2>/dev/null  <<EOF
+      #include <atomic>
+      int main() {}
+EOF
+    if [ "$?" = 0 ]; then
+        COMMON_FLAGS="$COMMON_FLAGS -DLEVELDB_DLCFORM_POSIX -DLEVELDB_ATOMIC_PRESENT"
+        DLCFORM_CXXFLAGS="-std=c++0x"
+    else
+        COMMON_FLAGS="$COMMON_FLAGS -DLEVELDB_DLCFORM_POSIX"
+    fi
+
+    # Test whether tcmalloc is available
+    $CXX $CXXFLAGS -x c++ - -o $CXXOUTPUT -ltcmalloc 2>/dev/null  <<EOF
+      int main() {}
+EOF
+    if [ "$?" = 0 ]; then
+        DLCFORM_LIBS="$DLCFORM_LIBS -ltcmalloc"
+    fi
+
+    rm -f $CXXOUTPUT 2>/dev/null
+fi
+
+DLCFORM_CCFLAGS="$DLCFORM_CCFLAGS $COMMON_FLAGS"
+DLCFORM_CXXFLAGS="$DLCFORM_CXXFLAGS $COMMON_FLAGS"
+
+echo "CC=$CC" >> $OUTPUT
+echo "CXX=$CXX" >> $OUTPUT
+echo "DLCFORM=$DLCFORM" >> $OUTPUT
+echo "DLCFORM_LDFLAGS=$DLCFORM_LDFLAGS" >> $OUTPUT
+echo "DLCFORM_LIBS=$DLCFORM_LIBS" >> $OUTPUT
+echo "DLCFORM_CCFLAGS=$DLCFORM_CCFLAGS" >> $OUTPUT
+echo "DLCFORM_CXXFLAGS=$DLCFORM_CXXFLAGS" >> $OUTPUT
+echo "DLCFORM_SHARED_CFLAGS=$DLCFORM_SHARED_CFLAGS" >> $OUTPUT
+echo "DLCFORM_SHARED_EXT=$DLCFORM_SHARED_EXT" >> $OUTPUT
+echo "DLCFORM_SHARED_LDFLAGS=$DLCFORM_SHARED_LDFLAGS" >> $OUTPUT
+echo "DLCFORM_SHARED_VERSIONED=$DLCFORM_SHARED_VERSIONED" >> $OUTPUT
