@@ -1528,51 +1528,40 @@ bool GetTransaction(const uint256& hash, CTransaction& txOut, uint256& hashBlock
     return false;
 }
 
-// 480 blocks / day, 3360 blocks / week
 bool fDevFee(int nHeight)
         {
         if (nHeight <= 700) return false;
         return (nHeight % 7 < 1);}
 
-/* int64_t GetDevFee(int nHeight)
-{
-    int64_t nDevFee = 0 * COIN;
-
-    if ((nHeight > 300) && (nHeight % 576 < 1)) {
-        nDevFee = 2016 * COIN;
-    }
-    return nDevFee;
-}
-*/
 int64_t GetDevFee(int nHeight)
 {
     int64_t nDevFee = 0 * COIN;
 
     if ((nHeight > 700) && (nHeight % 7 < 1)) {
         if (nHeight <= 14400) {
-        	nDevFee = 4 * COIN;
+                nDevFee = 4 * COIN;
         } else if (nHeight > 14400 && nHeight <= 28800) {
                 nDevFee = 10 * COIN;
         } else if (nHeight > 28800 && nHeight <= 43200) {
-        	nDevFee = 20 * COIN;
+                nDevFee = 4 * COIN;
         } else if (nHeight > 43200 && nHeight <= 57600) {
-                nDevFee = 35 * COIN;
+                nDevFee = 5 * COIN;
         } else if (nHeight > 57600 && nHeight <= 72000) {
-                nDevFee = 45 * COIN;
+                nDevFee = 3 * COIN;
         } else if (nHeight > 72000 && nHeight <= 86400) {
-                nDevFee = 65 * COIN;
+                nDevFee = 4 * COIN;
         } else if (nHeight > 86400 && nHeight <= 100800) {
-                nDevFee = 80 * COIN;
+                nDevFee = 5 * COIN;
         } else if (nHeight > 100800 && nHeight <= 115200) {
-                nDevFee = 90 * COIN;
+                nDevFee = 4 * COIN;
         } else if (nHeight > 115200 && nHeight <= 129600) {
-                nDevFee = 100 * COIN;
+                nDevFee = 3 * COIN;
         } else if (nHeight > 129600 && nHeight <= 144000) {
-                nDevFee = 120 * COIN;
+                nDevFee = 5 * COIN;
         } else if (nHeight > 144000) {
-                nDevFee = 200 * COIN;
+                nDevFee = 6 * COIN;
         }
-    }	
+    }
     return nDevFee;
 }
 
