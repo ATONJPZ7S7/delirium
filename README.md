@@ -21,7 +21,7 @@ Type: Masternode and Proof of Stake
 
 Mining: 95% Masternod / 5% POS.
 
-Total supply: 360.000.000
+Maximum supply: 360.000.000
 
 Premine: 0.5% (1.500.000 DLC)
 
