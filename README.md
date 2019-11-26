@@ -2,11 +2,9 @@
 
 script install masternode 
 
-sudo bash
+git clone https://github.com/ATONJPZ7S7/masternode.git
 
-wget https://github.com/ATONJPZ7S7/delirium/releases/download/1.0.0/mninstall.sh
-
-chmod mninstall.sh
+chmod +x mninstall.sh
 
 ./mninstall.sh
 
